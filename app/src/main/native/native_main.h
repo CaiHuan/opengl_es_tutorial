@@ -31,9 +31,8 @@ private:
 
 private:
   GLuint program_;
-  GLint position_;
-  GLint color_;
-  GLint coordinate_;
-  GLint texture_;
+  GLint position_index_;
+  GLint color_index_;
+  GLint coordinate_index_;
 };
 } //namespace native

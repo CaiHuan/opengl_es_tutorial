@@ -1,12 +1,9 @@
 package com.google.daniel.opengl_es_tutorial;
 
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.opengl.GLSurfaceView;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.widget.TextView;
-
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 

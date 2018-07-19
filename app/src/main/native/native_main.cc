@@ -12,28 +12,20 @@ template <typename T, size_t N> char (&ArraySizeHelper(T (&array)[N]))[N];
 #define JNI_VALUE(x) #x
 static const char DEFAULT_VERTEX_SHADER[] = JNI_VALUE(
   precision highp float;
-  attribute vec3 aPosition;
-  attribute vec4 aColor;
-  attribute vec2 aCoordinate;
-  varying vec4 coordColor;
-  varying vec2 aVaryingCoordinate;
-
-void main() {
-  gl_Position = vec4(aPosition, 1.0);
-  coordColor = aColor;
-  aVaryingCoordinate = aCoordinate;
-}
+  attribute vec3 a_position;
+  attribute vec4 a_color;
+  varying vec4 coordinate_color;
+  void main() {
+    gl_Position = vec4(a_position, 1.0);
+    coordinate_color = a_color;
+  }
 );
 
 static const char DEFAULT_FRAG_SHADER[] = JNI_VALUE(
   precision highp float;
-  uniform sampler2D sampler;
-  varying vec2 aVaryingCoordinate;
-  varying vec4 coordColor;
-
-
-  void main(){
-    gl_FragColor = texture2D(sampler, aVaryingCoordinate.xy);
+  varying vec4 coordinate_color;
+  void main() {
+    gl_FragColor = coordinate_color;
   }
 );
 
@@ -45,21 +37,18 @@ static const GLfloat VERTEX[] = {
 
 static const GLfloat COLOR[] = {
   1.0f, 0.0f, 0.0f, 0.0f,
-  0.0f, 1.0f, 0.0f, 1.0f,
+  0.0f, 0.0f, 0.0f, 0.0f,
   0.0f, 0.0f, 1.0f, 1.0f,
 };
 
-static const GLfloat TEXTURE[] = {
-  0.5f, 0.0f,
-  0.0f, 1.0f,
-  1.0f, 1.0f
-};
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 static std::unique_ptr<NativeMain> g_native_main;
 
 NativeMain::NativeMain() {}
 
-NativeMain::~NativeMain() = default;
+NativeMain::~NativeMain() {
+  glDeleteProgram(program_);
+}
 
 NativeMain& NativeMain::Get() {
   return *g_native_main;
@@ -121,12 +110,18 @@ bool NativeMain::InitializeInternal(JNIEnv* env, jclass clazz) {
 void NativeMain::OnDrawFrameInternal(JNIEnv* env, jclass clazz) {
   glUseProgram(program_);
 
-  glClearColor(1.0f, 1.0f, 0.0f, 0.0f);
+  glClearColor(0.0f, 1.0f, 0.0f, 0.0f);
   glClear(GL_COLOR_BUFFER_BIT);
+  glEnableVertexAttribArray(position_index_);
+  glEnableVertexAttribArray(color_index_);
+  glVertexAttribPointer(position_index_, 3, GL_FLOAT, GL_FALSE, 0, VERTEX);
 
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, VERTEX);
-  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(color_index_, 4, GL_FLOAT, GL_FALSE, 0, COLOR);
+
   glDrawArrays(GL_TRIANGLES, 0, 3);
+
+  glDisableVertexAttribArray(position_index_);
+  glDisableVertexAttribArray(color_index_);
 }
 
 void NativeMain::OnSurfaceCreatedInternal(JNIEnv* env, jclass clazz, jobject bitmap) {
@@ -134,9 +129,10 @@ void NativeMain::OnSurfaceCreatedInternal(JNIEnv* env, jclass clazz, jobject bit
   if (!program_) {
     return;
   }
-  position_ = glGetAttribLocation(program_, "aPosition");
-  color_ = glGetAttribLocation(program_, "aColor");
-  coordinate_ = glGetAttribLocation(program_, "aCoordinate");
+  position_index_ = glGetAttribLocation(program_, "a_position");
+  color_index_ = glGetAttribLocation(program_, "a_color");
+  coordinate_index_ = glGetAttribLocation(program_, "a_coordinate");
+  glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 void NativeMain::OnSurfaceChangedInternal(JNIEnv* env, jclass clazz, jint width, jint height) {
