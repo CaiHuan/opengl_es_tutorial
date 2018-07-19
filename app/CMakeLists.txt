@@ -17,6 +17,7 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
+             src/main/native/utils/shader_utils.cc
              src/main/native/library_loader.cc
              src/main/native/native_main.cc )
 
@@ -27,11 +28,20 @@ add_library( # Sets the name of the library.
 # completing its build.
 
 find_library( # Sets the name of the path variable.
-              log-lib
+              log_lib
 
               # Specifies the name of the NDK library that
               # you want CMake to locate.
               log )
+
+find_library(glesv2_lib
+             GLESv2)
+
+find_library(android_lib
+             android)
+
+find_library(graphics_lib
+             jnigraphics)
 
 # Specifies libraries CMake should link to your target library. You
 # can link multiple libraries, such as libraries you define in this
@@ -42,4 +52,7 @@ target_link_libraries( # Specifies the target library.
 
                        # Links the target library to the log library
                        # included in the NDK.
-                       ${log-lib} )
+                       ${log_lib}
+                       ${glesv2_lib}
+                       ${android_lib}
+                       ${graphics_lib})
