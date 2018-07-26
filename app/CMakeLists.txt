@@ -34,8 +34,8 @@ find_library( # Sets the name of the path variable.
               # you want CMake to locate.
               log )
 
-find_library(glesv2_lib
-             GLESv2)
+find_library(glesv3_lib
+             GLESv3)
 
 find_library(android_lib
              android)
@@ -53,6 +53,6 @@ target_link_libraries( # Specifies the target library.
                        # Links the target library to the log library
                        # included in the NDK.
                        ${log_lib}
-                       ${glesv2_lib}
+                       ${glesv3_lib}
                        ${android_lib}
                        ${graphics_lib})

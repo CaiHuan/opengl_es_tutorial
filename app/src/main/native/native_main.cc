@@ -2,44 +2,75 @@
 
 #include <memory>
 #include <GLES3/gl3.h>
+#include <string>
 
 #include "utils/shader_utils.h"
 
 namespace native {
 template <typename T, size_t N> char (&ArraySizeHelper(T (&array)[N]))[N];
 #define arraysize(array) (sizeof(ArraySizeHelper(array)))
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-#define JNI_VALUE(x) #x
-static const char DEFAULT_VERTEX_SHADER[] = JNI_VALUE(
-  precision highp float;
-  attribute vec3 a_position;
-  attribute vec4 a_color;
-  varying vec4 coordinate_color;
-  void main() {
-    gl_Position = vec4(a_position, 1.0);
-    coordinate_color = a_color;
+GLenum glCheckError_(const char *file, int line)
+{
+  GLenum errorCode;
+  while ((errorCode = glGetError()) != GL_NO_ERROR)
+  {
+    std::string error;
+    switch (errorCode)
+    {
+      case GL_INVALID_ENUM:                  error = "INVALID_ENUM"; break;
+      case GL_INVALID_VALUE:                 error = "INVALID_VALUE"; break;
+      case GL_INVALID_OPERATION:             error = "INVALID_OPERATION"; break;
+      //case GL_STACK_OVERFLOW:                error = "STACK_OVERFLOW"; break;
+      //case GL_STACK_UNDERFLOW:               error = "STACK_UNDERFLOW"; break;
+      case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
+      case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
+    }
+
+    //std::cout << error << " | " << file << " (" << line << ")" << std::endl;
   }
-);
+  return errorCode;
+}
+#define glCheckError() glCheckError_(__FILE__, __LINE__)
+///////////////////////////////////////////////////////////////////////////////////////////////////
+static const int kVertexPosSize = 3;
+static const int kVertexColorSize = 4;
+static const int kVertexPosIndex = 0;
+static const int kVertexColorIndex = 1;
+static const int kVertexStride = sizeof(GLfloat) * (kVertexPosSize + kVertexColorSize);
 
-static const char DEFAULT_FRAG_SHADER[] = JNI_VALUE(
-  precision highp float;
-  varying vec4 coordinate_color;
-  void main() {
-    gl_FragColor = coordinate_color;
-  }
-);
+static const char DEFAULT_VERTEX_SHADER[] =
+      "#version 320 es \n"
+      "precision mediump float;\n"
+      "layout (location = 0) in vec3 aPos;\n"
+      "void main()\n"
+      "{\n"
+      "   gl_Position = vec4(1.0f, 1.0f, 1.0f, 1.0);\n"
+      "}\n";
 
+static const char DEFAULT_FRAG_SHADER[] =
+      "#version 320 es \n"
+      "precision mediump float;\n"
+      "out vec4 FragColor;\n"
+      "void main()\n"
+      "{\n"
+      "   FragColor = vec4(0.0f, 0.0f, 0.0f, 0.0f);\n"
+      "}\n";
 
-static const GLfloat VERTEX[] = {
-  0.0f, 0.5f, 0.0f,
-  -0.5f, -0.5f, 0.0f,
-  0.5f, -0.5f, 0.0f};
-
-static const GLfloat COLOR[] = {
-  1.0f, 0.0f, 0.0f, 0.0f,
-  0.0f, 0.0f, 0.0f, 0.0f,
-  0.0f, 0.0f, 1.0f, 1.0f,
+//set up vertex data( and buffer(s)) and configure vertex attributes
+float vertices[] = {
+  0.5f, 0.5f, 0.0f,   // 右上角
+  0.5f, -0.5f, 0.0f,  // 右下角
+  -0.5f, -0.5f, 0.0f, // 左下角
+  -0.5f, 0.5f, 0.0f   // 左上角
 };
+unsigned int indices[] = {
+  0, 1, 3,
+  1, 2, 3
+};
+
+static const GLuint kPositionIndex = 0;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 static std::unique_ptr<NativeMain> g_native_main;
@@ -48,6 +79,8 @@ NativeMain::NativeMain() {}
 
 NativeMain::~NativeMain() {
   glDeleteProgram(program_);
+  glDeleteBuffers(2, vertex_buffer_object_);
+  glDeleteVertexArrays(1, &vertex_array_object_);
 }
 
 NativeMain& NativeMain::Get() {
@@ -109,19 +142,16 @@ bool NativeMain::InitializeInternal(JNIEnv* env, jclass clazz) {
 
 void NativeMain::OnDrawFrameInternal(JNIEnv* env, jclass clazz) {
   glUseProgram(program_);
-
-  glClearColor(0.0f, 1.0f, 0.0f, 0.0f);
+  glCheckError();
   glClear(GL_COLOR_BUFFER_BIT);
-  glEnableVertexAttribArray(position_index_);
-  glEnableVertexAttribArray(color_index_);
-  glVertexAttribPointer(position_index_, 3, GL_FLOAT, GL_FALSE, 0, VERTEX);
+  glCheckError();
+  glBindVertexArray(vertex_array_object_);
+  glCheckError();
+  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
+  glCheckError();
+  glBindVertexArray(0);
+  glCheckError();
 
-  glVertexAttribPointer(color_index_, 4, GL_FLOAT, GL_FALSE, 0, COLOR);
-
-  glDrawArrays(GL_TRIANGLES, 0, 3);
-
-  glDisableVertexAttribArray(position_index_);
-  glDisableVertexAttribArray(color_index_);
 }
 
 void NativeMain::OnSurfaceCreatedInternal(JNIEnv* env, jclass clazz, jobject bitmap) {
@@ -129,10 +159,32 @@ void NativeMain::OnSurfaceCreatedInternal(JNIEnv* env, jclass clazz, jobject bit
   if (!program_) {
     return;
   }
-  position_index_ = glGetAttribLocation(program_, "a_position");
-  color_index_ = glGetAttribLocation(program_, "a_color");
-  coordinate_index_ = glGetAttribLocation(program_, "a_coordinate");
-  glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
+  glGenVertexArrays(1, &vertex_array_object_);
+  glCheckError();
+  glBindVertexArray(vertex_array_object_);
+  glCheckError();
+  glGenBuffers(2, vertex_buffer_object_);
+  glCheckError();
+  glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_object_[0]);
+  glCheckError();
+  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+  glCheckError();
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vertex_buffer_object_[1]);
+  glCheckError();
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+  glCheckError();
+  glVertexAttribPointer(kPositionIndex, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+  glCheckError();
+  glEnableVertexAttribArray(kPositionIndex);
+  glCheckError();
+  glBindVertexArray(0);
+  glCheckError();
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glCheckError();
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+  glCheckError();
+  glClearColor ( 1.0f, 1.0f, 1.0f, 0.0f );
 }
 
 void NativeMain::OnSurfaceChangedInternal(JNIEnv* env, jclass clazz, jint width, jint height) {
